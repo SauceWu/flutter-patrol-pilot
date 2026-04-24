@@ -1,0 +1,38 @@
+# ── Skill internal planning (not for public distribution) ─────────────────────
+# Development-time scaffolding from the GSD workflow used to build this skill.
+# Contains session state, phase research/plans/summaries — not useful to users.
+.planning/
+
+# Project-local CLAUDE.md used while developing THIS skill (contains GSD workflow
+# instructions). The public-facing CLAUDE.md template lives at templates/CLAUDE_md_snippet.md.
+CLAUDE.md
+
+# ── Python bytecode cache (from scripts/parse_failure.py) ─────────────────────
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Per-iteration test artifacts ──────────────────────────────────────────────
+# Produced by scripts/run_test.sh and scripts/sim_snapshot.sh at the CONSUMING
+# project root. Ignored here too so skill-dev smoke tests don't leak artifacts.
+.test-results/
+
+# Flutter build output (never land in this skill repo, but guard anyway)
+build/
+.dart_tool/
+*.iml
+
+# ── Editor / IDE local state ──────────────────────────────────────────────────
+.idea/
+.vscode/
+.cursor/
+.claude/
+
+# ── macOS cruft ───────────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*.swo
+
+# ── Local agent transcripts / scratchpads ─────────────────────────────────────
+*.local.md
+scratch/
