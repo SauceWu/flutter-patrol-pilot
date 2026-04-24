@@ -8,7 +8,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Reference Documentation** - Failure triage, patrol patterns cheatsheet, and troubleshooting guide authored and accurate to Patrol 4.x / Xcode 16+
+- [x] **Phase 1: Reference Documentation** - Failure triage, patrol patterns cheatsheet, and troubleshooting guide authored and accurate to Patrol 4.x / Xcode 16+
 - [ ] **Phase 2: Scripts** - All five agent-callable scripts executable, emitting correct JSON, and covering the full build-test-triage-snapshot pipeline
 - [ ] **Phase 3: Templates & Completion** - Dart test template and CLAUDE.md snippet usable, skill iteration loop verified end-to-end
 

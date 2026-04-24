@@ -17,7 +17,7 @@
 - [ ] **SCRIPT-02**: `scripts/build.sh --sim <UDID>` runs `patrol build ios --simulator`, installs the .app, emits JSON summary; failure output includes first 5 build error lines only (not raw log)
 - [ ] **SCRIPT-03**: `scripts/run_test.sh --sim <UDID> --target <file>` runs patrol test, parses xcresult, writes `.test-results/latest.json` and emits it to stdout
 - [ ] **SCRIPT-04**: `scripts/parse_failure.py <xcresult>` parses xcresult into structured failure signals JSON with fields: test_name, signal, file, line, message, raw_stack, finder_context
-- [ ] **SCRIPT-05**: `scripts/sim_snapshot.sh --sim <UDID> [--tree|--screenshot]` captures a11y tree (default) or screenshot; emits JSON with path and truncated tree_summary; falls back to screenshot if axe not installed
+- [x] **SCRIPT-05**: `scripts/sim_snapshot.sh --sim <UDID> [--tree|--screenshot]` captures a11y tree (default) or screenshot; emits JSON with path and truncated tree_summary; falls back to screenshot if axe not installed
 
 ### Templates
 
@@ -63,7 +63,7 @@
 | SCRIPT-02 | Phase 2: Scripts | Pending |
 | SCRIPT-03 | Phase 2: Scripts | Pending |
 | SCRIPT-04 | Phase 2: Scripts | Pending |
-| SCRIPT-05 | Phase 2: Scripts | Pending |
+| SCRIPT-05 | Phase 2: Scripts | Complete |
 | TMPL-01 | Phase 3: Templates & Completion | Pending |
 | TMPL-02 | Phase 3: Templates & Completion | Pending |
 
