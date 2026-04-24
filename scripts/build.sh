@@ -54,26 +54,39 @@ MARKER="/tmp/build_start_marker_$$"
 touch "$MARKER"
 
 # ── build ──────────────────────────────────────────────────────────────────────
-echo "[build.sh] Running patrol build ios --simulator --device-id $UDID..." >&2
+# NOTE: `patrol build ios --simulator` builds a simulator-targeted .app bundle.
+# It does NOT take a --device / --device-id flag (that is a `patrol test` flag).
+# Device selection happens in the install step below via `xcrun simctl install <UDID>`.
+echo "[build.sh] Running patrol build ios --simulator (target UDID for install: $UDID)..." >&2
 
 # tee writes patrol output to both the log file AND stderr.
 # stdout stays clean so the final JSON is the only thing on stdout.
+# Temporarily disable set -e during patrol — non-zero exit here is EXPECTED
+# (build failures are the common case) and must be captured, not aborted on.
+set +e
 if [ -n "$TARGET_FILE" ]; then
-  patrol build ios --simulator --device-id "$UDID" --target "$TARGET_FILE" 2>&1 | tee "$BUILD_LOG_PATH" >&2
+  patrol build ios --simulator --target "$TARGET_FILE" 2>&1 | tee "$BUILD_LOG_PATH" >&2
   BUILD_EXIT=${PIPESTATUS[0]}
 else
-  patrol build ios --simulator --device-id "$UDID" 2>&1 | tee "$BUILD_LOG_PATH" >&2
+  patrol build ios --simulator 2>&1 | tee "$BUILD_LOG_PATH" >&2
   BUILD_EXIT=${PIPESTATUS[0]}
 fi
+set -e
 
 echo "[build.sh] patrol build exited with code $BUILD_EXIT" >&2
 
 # ── find xcresult (timestamped path — changes every build) ────────────────────
+# NOTE: .xcresult is a directory (bundle). `ls <glob>` descends into each match
+# and prefixes its contents with "<path>:" when multiple matches exist — the
+# trailing colon would pollute xcresult_path. Use `find -type d` to list bundles.
 XCRESULT_PATH=""
-XCRESULT_PATH=$(ls -t build/ios_results_*.xcresult 2>/dev/null | head -1 || true)
+if [ -d build ]; then
+  XCRESULT_PATH=$(find build -maxdepth 1 -type d -name "ios_results_*.xcresult" 2>/dev/null \
+    | sort -r | head -1 || true)
+fi
 if [ -z "$XCRESULT_PATH" ]; then
   XCRESULT_PATH=$(find ~/Library/Developer/Xcode/DerivedData \
-    -name "*.xcresult" -newer "$MARKER" -maxdepth 6 2>/dev/null \
+    -maxdepth 6 -type d -name "*.xcresult" -newer "$MARKER" 2>/dev/null \
     | sort | tail -1 || true)
 fi
 rm -f "$MARKER"

@@ -127,7 +127,12 @@ take_screenshot() {
   ts=$(date +%s)
   local out_path="${ITER_ABS}/screenshot-${ts}.png"
   echo "[sim_snapshot] Taking screenshot → $out_path" >&2
-  if ! xcrun simctl io "$UDID" screenshot "$out_path" 2>&1 >&2; then
+  # Route BOTH stdout and stderr of simctl to stderr — simctl prints chatter like
+  # "Detected file type from extension: PNG" to stdout, which would otherwise be
+  # captured by $(take_screenshot) along with the real out_path. The order
+  # `>&2 2>&1` dup's stdout→stderr FIRST, then stderr→(now-stderr)stdout,
+  # so both streams end up on stderr.
+  if ! xcrun simctl io "$UDID" screenshot "$out_path" >&2 2>&1; then
     local sc_exit=$?
     printf '{"mode":null,"udid":"%s","tool":null,"tree_path":null,"tree_summary":null,"token_estimate":null,"screenshot_path":null,"warning":null,"error":"xcrun simctl io screenshot exited with code %d"}\n' \
       "$UDID" "$sc_exit"
