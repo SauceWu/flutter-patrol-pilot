@@ -9,6 +9,23 @@
 # Exit 3: (reserved) xcresult not found after build — currently treated as non-fatal
 set -euo pipefail
 
+# ── fvm auto-detection ────────────────────────────────────────────────────────
+# If invoked from an fvm-managed project, prepend .fvm/flutter_sdk/bin to PATH
+# so `flutter` / `dart` resolve to the project-pinned version instead of the
+# system-wide one. Walks up at most 5 parent dirs to find .fvm/flutter_sdk.
+_fvm_dir="$PWD"
+for _i in 1 2 3 4 5; do
+  if [ -d "$_fvm_dir/.fvm/flutter_sdk/bin" ]; then
+    export PATH="$_fvm_dir/.fvm/flutter_sdk/bin:$PATH"
+    echo "[fvm] using $_fvm_dir/.fvm/flutter_sdk" >&2
+    break
+  fi
+  _parent="$(dirname "$_fvm_dir")"
+  [ "$_parent" = "$_fvm_dir" ] && break
+  _fvm_dir="$_parent"
+done
+unset _fvm_dir _parent _i || true
+
 START_SECONDS=$SECONDS
 
 # ── arg parsing ────────────────────────────────────────────────────────────────

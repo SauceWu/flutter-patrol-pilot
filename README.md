@@ -144,6 +144,17 @@ Skill 在第一次运行时会自动验证并缓存:
 
 任一缺失,skill 会停下来告诉用户该装什么,**不会未经授权做全局安装**。
 
+### fvm 项目自动支持
+
+`scripts/build.sh` 和 `scripts/run_test.sh` 启动时会从当前目录向上最多 5 层查找 `.fvm/flutter_sdk/bin`,找到就 prepend 到 `PATH`。这意味着:
+
+- **在 fvm 管理的项目里不需要任何额外配置** —— skill 会自动用 `.fvmrc` 锁定的 Flutter 版本而不是系统全局版本
+- 在 monorepo 里从子目录(例如 `example/`)触发也 work,只要根目录有 `.fvm/flutter_sdk`
+- 非 fvm 项目不受任何影响(检测失败就走原逻辑)
+- `patrol_cli` 建议用 fvm 的 dart 激活: `fvm dart pub global activate patrol_cli`,这样 patrol 内部跑的 dart 跟项目 pin 的 Flutter 一致
+
+检测成功时会在 stderr 打印 `[fvm] using /path/to/.fvm/flutter_sdk`,方便调试。
+
 ## Patrol 4.x 项目一次性 setup(skill 管不到的部分)
 
 Patrol 4.x 需要在 iOS 侧做一次性手工配置,之后 skill 全自动。未配置时 skill 会返回:
