@@ -26,6 +26,16 @@ for _i in 1 2 3 4 5; do
 done
 unset _fvm_dir _parent _i || true
 
+# ── pub-cache/bin auto-detection ──────────────────────────────────────────────
+# `patrol_cli` is installed via `dart pub global activate`, which puts its
+# executable in ~/.pub-cache/bin. That directory is NOT on PATH by default;
+# pub prints a warning telling the user to add it themselves. Rather than
+# fail with "command not found: patrol" when the user skipped that step,
+# append ~/.pub-cache/bin to PATH if it exists.
+if [ -d "$HOME/.pub-cache/bin" ] && [[ ":$PATH:" != *":$HOME/.pub-cache/bin:"* ]]; then
+  export PATH="$PATH:$HOME/.pub-cache/bin"
+fi
+
 START_SECONDS=$SECONDS
 
 # ── arg parsing ───────────────────────────────────────────────────────────────
