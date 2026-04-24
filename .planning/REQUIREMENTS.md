@@ -56,16 +56,16 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REF-01 | Phase 1 | Pending |
-| REF-02 | Phase 1 | Pending |
-| REF-03 | Phase 1 | Pending |
-| SCRIPT-01 | Phase 2 | Pending |
-| SCRIPT-02 | Phase 2 | Pending |
-| SCRIPT-03 | Phase 2 | Pending |
-| SCRIPT-04 | Phase 2 | Pending |
-| SCRIPT-05 | Phase 2 | Pending |
-| TMPL-01 | Phase 3 | Pending |
-| TMPL-02 | Phase 3 | Pending |
+| REF-01 | Phase 1: Reference Documentation | Pending |
+| REF-02 | Phase 1: Reference Documentation | Pending |
+| REF-03 | Phase 1: Reference Documentation | Pending |
+| SCRIPT-01 | Phase 2: Scripts | Pending |
+| SCRIPT-02 | Phase 2: Scripts | Pending |
+| SCRIPT-03 | Phase 2: Scripts | Pending |
+| SCRIPT-04 | Phase 2: Scripts | Pending |
+| SCRIPT-05 | Phase 2: Scripts | Pending |
+| TMPL-01 | Phase 3: Templates & Completion | Pending |
+| TMPL-02 | Phase 3: Templates & Completion | Pending |
 
 **Coverage:**
 - v1 requirements: 10 total
@@ -74,4 +74,4 @@
 
 ---
 *Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 after initial definition*
+*Last updated: 2026-04-24 after roadmap creation*
