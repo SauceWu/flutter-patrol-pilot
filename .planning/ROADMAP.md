@@ -25,7 +25,12 @@
   2. Agent can generate or repair Patrol test code using only patrol-patterns.md as a reference — all finder types, chained finders, interaction methods, assertions, and pump/settle strategies are present with correct Patrol 4.x syntax
   3. Agent can resolve the top iOS / CocoaPods / signing / xcresulttool failure modes by following troubleshooting.md step-by-step, without needing to search external docs
   4. All three docs reflect Patrol 4.x APIs (test_directory: patrol_test/, $.platform.mobile naming, no bindingType param) and Xcode 16+ xcresulttool subcommand syntax (not the deprecated --legacy form)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-A-PLAN.md — 创建 reference/failure-triage.md（信号→类别→动作查找表，5-A 到 5-E 详细块）
+- [ ] 01-B-PLAN.md — 创建 reference/patrol-patterns.md（Patrol 4.x 语法速查表）
+- [ ] 01-C-PLAN.md — 创建 reference/troubleshooting.md（iOS/Xcode/CocoaPods 故障排查步骤）
 
 ### Phase 2: Scripts
 **Goal**: The agent can drive the full build-test-triage-snapshot pipeline using shell scripts that emit clean JSON summaries, keeping the iteration loop within the 30k token budget
@@ -55,11 +60,11 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reference Documentation | 0/0 | Not started | - |
+| 1. Reference Documentation | 0/3 | Planned | - |
 | 2. Scripts | 0/0 | Not started | - |
 | 3. Templates & Completion | 0/0 | Not started | - |
 
 ---
 
 *Roadmap created: 2026-04-24*
-*Last updated: 2026-04-24 after initial creation*
+*Last updated: 2026-04-24 after Phase 1 planning*
