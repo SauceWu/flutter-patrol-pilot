@@ -481,6 +481,317 @@ appearing during code signing of `Flutter.framework` or other framework bundles.
 
 ---
 
+## Issue 12 — `Module 'patrol' not found` in RunnerUITests
+
+**Symptom:** Compiling `RunnerUITests.m` in Xcode (or via `xcodebuild`) fails with:
+```
+RunnerUITests.m:2:9: fatal error: module 'patrol' not found
+@import patrol;
+        ^
+```
+
+**Cause:** The `RunnerUITests` target was added to `Runner.xcodeproj` (manually in Xcode GUI, or by the patrol setup doc), but the project `Podfile` has no matching `target 'RunnerUITests'` block. Without it, `pod install` never generates `Pods-Runner-RunnerUITests.xcconfig`, and the `patrol.framework` is never linked into the UI test binary — hence `@import patrol` cannot resolve.
+
+**Fix Steps:**
+
+1. Open `ios/Podfile` and ensure the `Runner` target declaration uses modular headers and nests `RunnerUITests` with `inherit! :complete` (NOT `:search_paths`, which is for unit tests):
+   ```ruby
+   target 'Runner' do
+     use_frameworks!
+     use_modular_headers!      # required so `@import patrol` resolves
+
+     flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+     target 'RunnerTests' do
+       inherit! :search_paths
+     end
+
+     target 'RunnerUITests' do
+       inherit! :complete      # pulls patrol.framework into the UITests binary
+     end
+   end
+   ```
+
+2. Re-run `pod install`:
+   ```bash
+   cd ios && pod install
+   ```
+
+3. Confirm the generated xcconfig exists:
+   ```bash
+   ls "ios/Pods/Target Support Files/Pods-Runner-RunnerUITests/"
+   # must contain Pods-Runner-RunnerUITests.{debug,release,profile}.xcconfig
+   ```
+
+4. Retry `patrol build ios --simulator`. **Do NOT press Cmd+B in Xcode to test compilation** — `RunnerUITests.m` uses `PATROL_INTEGRATION_TEST_IOS_RUNNER()`, whose macro expansion depends on `-D CLEAR_PERMISSIONS=...` and `-D FULL_ISOLATION=...` flags that only `patrol build` / `patrol test` inject. Xcode GUI builds will always fail with `use of undeclared identifier 'CLEAR_PERMISSIONS'`. This is expected — not a bug.
+
+**Loop Phase:** [1] Prepare environment (one-time setup) — category **5-A**
+
+---
+
+## Issue 13 — CocoaPods Fails on `objectVersion '70'` (Xcode 26+)
+
+**Symptom:** `pod install` fails with:
+```
+[Xcodeproj] Unable to find compatibility version string for object version '70'
+```
+
+**Cause:** Xcode 26 writes `project.pbxproj` with `objectVersion = 70` (the new synced-folder format). CocoaPods's `xcodeproj` gem (up to 1.27.0, as shipped with CocoaPods 1.16.2) only understands up to objectVersion 63. When Xcode 26 auto-upgrades the project file — which happens the first time you add a target in the GUI — subsequent `pod install` runs break.
+
+Cross-reference: CocoaPods issues [#12840](https://github.com/CocoaPods/CocoaPods/issues/12840) and [#12889](https://github.com/CocoaPods/CocoaPods/issues/12889).
+
+**Fix Steps:**
+
+1. Check the current object version:
+   ```bash
+   rg -n "objectVersion" ios/Runner.xcodeproj/project.pbxproj | head -1
+   # if it reports 70, this issue applies
+   ```
+
+2. Downgrade the project format (safe — Xcode 26 still opens projects at version 60):
+   ```bash
+   cp ios/Runner.xcodeproj/project.pbxproj ios/Runner.xcodeproj/project.pbxproj.bak-v70
+   sed -i '' 's/objectVersion = 70;/objectVersion = 60;/' ios/Runner.xcodeproj/project.pbxproj
+   ```
+
+3. Re-run `pod install`. It should now complete.
+
+4. Note: Flutter's `patrol build ios` invokes `flutter build` which internally calls "Upgrading project.pbxproj" and rewrites it at a Flutter-compatible version (~54), so you typically don't need to re-run the sed step. But if you open the project in Xcode 26 and save, the version may bump again — re-apply the sed if `pod install` breaks again.
+
+**Loop Phase:** [1] Prepare environment — category **5-D** (environment/tooling mismatch)
+
+---
+
+## Issue 14 — `Sandbox: mkdir deny(1) file-write-create ... RunnerUITests.xctest`
+
+**Symptom:** `patrol build ios --simulator` fails (exit 65) with (visible only with `--verbose`):
+```
+error: Sandbox: mkdir(22856) deny(1) file-write-create .../RunnerUITests.xctest
+  (in target 'RunnerUITests' from project 'Runner')
+mkdir: ... RunnerUITests.xctest: Operation not permitted
+```
+
+**Cause:** Xcode 15+ introduced a "User Script Sandboxing" build setting (`ENABLE_USER_SCRIPT_SANDBOXING`). For any target created in the Xcode GUI on Xcode 26, the default is `YES`. When the build runs Flutter's `Thin Binary` / `xcode_backend.sh` run scripts (which need to write into `build/`), the sandbox denies the write and xcodebuild exits 65.
+
+The Flutter SDK's bundled `Runner` target template sets this to `NO` automatically, but `RunnerUITests` — when created manually in the Xcode GUI — inherits the Xcode 26 default of `YES`.
+
+**Fix Steps:**
+
+1. Confirm the settings:
+   ```bash
+   rg -n "ENABLE_USER_SCRIPT_SANDBOXING" ios/Runner.xcodeproj/project.pbxproj
+   # look for any `= YES;` lines — these are the problem
+   ```
+
+2. Flip them all to `NO`:
+   ```bash
+   sed -i '' 's/ENABLE_USER_SCRIPT_SANDBOXING = YES;/ENABLE_USER_SCRIPT_SANDBOXING = NO;/g' \
+     ios/Runner.xcodeproj/project.pbxproj
+   ```
+
+3. Retry the build.
+
+Alternatively, in Xcode GUI: select the `RunnerUITests` target → Build Settings → search "User Script Sandboxing" → set all three configurations (Debug/Release/Profile) to `No`.
+
+**Loop Phase:** [2] Build — category **5-A** (build configuration)
+
+---
+
+## Issue 15 — "Clone 1 / Clone 2 / Clone 3" Simulators Spawned During Tests
+
+**Symptom:** Running `patrol test --device <UDID>` (or any tooling that ends up calling `xcodebuild test-without-building`) causes Xcode to spawn several additional simulators with names like `iPhone 17 Pro Max (Clone 1)`, `… (Clone 2)`, `… (Clone 3)`. After the run (or a Ctrl+C) these clones typically disappear, but while tests are running you see multiple Simulator windows, fans spin up, and Patrol's native↔app port handshake may flake because the target app landed on a clone instead of the sim you asked for.
+
+**Cause — this is Xcode's "Use parallel testing" feature, not a patrol bug.**
+
+`xcodebuild test-without-building` defaults to `-parallel-testing-enabled YES`. When enabled, Xcode duplicates the destination simulator (via `simctl clone`) and distributes test classes across the clones, tearing them down when the run ends. This is useful for a large unit-test bundle; it is actively harmful for a Patrol UI test that needs a single, stable sim to drive the app.
+
+Two independent trigger points turn this on:
+
+1. **The Runner scheme marks testable references as parallelizable.** Look at `ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme`:
+   ```xml
+   <TestableReference
+      skipped = "NO"
+      parallelizable = "YES">   <!-- clones the sim per test -->
+      <BuildableReference … BlueprintName = "RunnerUITests" …/>
+   </TestableReference>
+   ```
+
+2. **The xctestrun Xcode emits bakes `ParallelizationEnabled = true` into each test target** (verify with `plutil -p build/ios_integ/Build/Products/Runner_iphonesimulator*.xctestrun`). `patrol_cli 4.3.x` then invokes `xcodebuild test-without-building` without passing `-parallel-testing-enabled NO` (see `~/.pub-cache/hosted/pub.dev/patrol_cli-4.3.1/lib/src/crossplatform/app_options.dart:279`), so Xcode is free to clone.
+
+As a secondary aggravator, patrol_cli 4.3.x also passes `-destination platform=iOS Simulator,OS=<v>,name=<name>` (not `id=<UDID>`). If you happen to have several sims sharing the target's name across runtimes, xcodebuild may boot the wrong one in addition to the clones. Renaming the target sim is a tidy precaution but does NOT stop cloning — only disabling parallel testing does.
+
+**Fix Steps (immediate recovery):**
+
+1. Kill any active test processes and shut down every sim:
+   ```bash
+   pkill -9 -f xcodebuild 2>/dev/null || true
+   pkill -9 -f "patrol test" 2>/dev/null || true
+   pkill -9 -f RunnerUITests 2>/dev/null || true
+   xcrun simctl shutdown all
+   killall "Simulator" 2>/dev/null || true
+   ```
+
+2. Verify the clones are gone (they are ephemeral and usually do not appear in `simctl list devices` once shut down):
+   ```bash
+   xcrun simctl list devices booted   # expect: no booted sims (or only your target)
+   ```
+
+**Fix Steps (prevention) — applied by this skill since v0.3:**
+
+1. **`scripts/run_test.sh` no longer calls `patrol test` by default.** It discovers the xctestrun produced by `patrol build ios --simulator` and drives `xcodebuild test-without-building` itself, always with:
+   ```bash
+   xcodebuild test-without-building \
+     -xctestrun <…>.xctestrun \
+     -only-testing RunnerUITests/RunnerUITests \
+     -destination "id=<UDID>" \
+     -parallel-testing-enabled NO \
+     -disable-concurrent-destination-testing \
+     -resultBundlePath .test-results/iter-N/result.xcresult
+   TEST_RUNNER_PATROL_TEST_PORT=8081 \
+   TEST_RUNNER_PATROL_APP_PORT=8082
+   ```
+   This eliminates cloning, forces `id=<UDID>` so name collisions cannot misroute the run, and hands the Patrol native server / app client the default ports they expect.
+
+2. **`scripts/build.sh` patches the xctestrun after `patrol build` finishes**, flipping every `ParallelizationEnabled` dict key to `false`. Redundant with `-parallel-testing-enabled NO`, but the two together are belt-and-suspenders: if you later shell out to `xcodebuild` yourself and forget the flag, the xctestrun still declines to clone.
+
+3. **(Optional) Disable parallelization in the scheme** so Xcode UI runs (not going through the skill) behave the same way. Edit `ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme` and flip both `parallelizable = "YES"` → `"NO"`:
+   ```bash
+   sed -i '' 's/parallelizable = "YES"/parallelizable = "NO"/g' \
+     ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
+   ```
+   Commit the change so other contributors get the same behavior.
+
+4. **`--isolate-sim` is a defense-in-depth flag**, not the primary fix. It shuts down any simulator that this run booted (via an EXIT trap) and proactively shuts down non-target booted sims before testing starts. With the direct `xcodebuild` path above, it is almost never needed — but it is still useful if you mix `--use-patrol` (legacy path) into a run.
+
+5. **`--use-patrol` is the legacy escape hatch.** It routes through `patrol test` and therefore hits the clone/`name=` bugs. Only use it when debugging something unrelated to those issues.
+
+**Loop Phase:** [1] Prepare environment — category **5-D** (environment / tooling defaults interfere with the run)
+
+---
+
+## Issue 16 — `Library not loaded: @rpath/_Testing_Foundation.framework` / `lib_TestingInterop.dylib` (Xcode 26 Swift Testing)
+
+### Symptom
+
+`xcodebuild test-without-building` (or `patrol test` on Xcode 26) hangs for ~6 minutes on:
+
+```
+t = nans Wait for <bundle_id> to idle
+```
+
+then reports:
+
+```
+Testing failed:
+  RunnerUITests-Runner (<pid>) encountered an error (The test runner timed out while preparing to run tests.)
+** TEST EXECUTE FAILED **
+```
+
+Manually launching the app (`xcrun simctl launch --console-pty <UDID> <bundle_id>`) reveals the true cause — a dyld linker error at startup:
+
+```
+dyld[<pid>]: Library not loaded: @rpath/_Testing_Foundation.framework/_Testing_Foundation
+  Referenced from: .../Runner.app/Frameworks/libXCTestSwiftSupport.dylib
+  Reason: tried [20+ paths]... (no such file)
+```
+
+or
+
+```
+dyld[<pid>]: Library not loaded: @rpath/lib_TestingInterop.dylib
+  Referenced from: .../Runner.app/Frameworks/Testing.framework/Testing
+```
+
+### Root cause
+
+Xcode 26 / Swift 6.1 introduced a new "Swift Testing" runtime layer. The stock `libXCTestSwiftSupport.dylib` and `Testing.framework` that Flutter embeds into `Runner.app/Frameworks/` now hard-depend on:
+
+- `_Testing_Foundation.framework`
+- `_Testing_CoreGraphics.framework`
+- `_Testing_CoreImage.framework`
+- `_Testing_UIKit.framework`
+- `lib_TestingInterop.dylib`
+
+Flutter's build pipeline (`patrol build ios` → `flutter build ios --debug --simulator`) does **not** copy these new files into the app bundle, and the iOS 26.x simruntime does **not** ship them in its system library path. Result: Runner.app dyld-crashes on launch; XCUITest never sees the app reach "idle"; 6-minute test-runner timeout.
+
+This affects **both** `Runner.app` (the app-under-test) and `RunnerUITests-Runner.app` (the XCTRunner host) — both bundles need the fix.
+
+### Fix — automatic (recommended)
+
+`scripts/build.sh` (v0.3+) detects Xcode 26 and copies the missing files from the iPhoneSimulator platform into both `.app/Frameworks/` directories **before** calling `xcrun simctl install`. The log shows:
+
+```
+[build.sh] injected _Testing_Foundation.framework → Runner.app
+[build.sh] injected lib_TestingInterop.dylib → Runner.app
+[build.sh] injected _Testing_Foundation.framework → RunnerUITests-Runner.app
+...
+[build.sh] Xcode-26 Swift Testing deps: injected 10 file(s) across app bundles
+```
+
+Sources the script pulls from (change if your Xcode is non-standard):
+
+```
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/_Testing_*.framework
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/lib_TestingInterop.dylib
+```
+
+The script resolves the Xcode root via `xcrun --sdk iphonesimulator --show-sdk-platform-path`, so `xcode-select -s` and non-default Xcode locations Just Work.
+
+This is a no-op on Xcode <26 (the source files don't exist, so the per-file existence check skips them).
+
+### Fix — manual (only if build.sh is not available / CI can't run the script)
+
+```bash
+UDID=<your_sim_udid>
+BUNDLE_ID=dev.example.yourapp
+RUNNER_BUNDLE_ID=${BUNDLE_ID}.RunnerUITests.xctrunner   # or inspect Info.plist
+
+APP_UNDER_TEST=$(xcrun simctl get_app_container $UDID $BUNDLE_ID)
+RUNNER_APP=$(xcrun simctl get_app_container $UDID $RUNNER_BUNDLE_ID)
+XCODE_FW=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks
+XCODE_LIB=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib
+
+for app in "$APP_UNDER_TEST" "$RUNNER_APP"; do
+  cp -R "$XCODE_FW/_Testing_Foundation.framework" "$app/Frameworks/"
+  cp -R "$XCODE_FW/_Testing_CoreGraphics.framework" "$app/Frameworks/"
+  cp -R "$XCODE_FW/_Testing_CoreImage.framework" "$app/Frameworks/"
+  cp -R "$XCODE_FW/_Testing_UIKit.framework" "$app/Frameworks/"
+  cp "$XCODE_LIB/lib_TestingInterop.dylib" "$app/Frameworks/"
+done
+```
+
+Note: `xcrun simctl install` strips and re-copies the app bundle, so any frameworks injected this way to the sim container are lost on next install. Inject into the **build output** (`build/ios_integ/Build/Products/Debug-iphonesimulator/*.app/Frameworks/`) before `simctl install`, so the injected copies come along for the ride.
+
+### How to confirm the fix worked
+
+Before fix:
+```
+$ xcrun simctl launch --console-pty <UDID> <bundle_id>
+dyld[...]: Library not loaded: @rpath/_Testing_Foundation.framework/_Testing_Foundation
+```
+
+After fix (app launches cleanly, process stays alive):
+```
+$ xcrun simctl launch --console-pty <UDID> <bundle_id>
+<bundle_id>: 51593
+```
+
+Then the test runs in seconds, not minutes.
+
+### Detecting this issue from an xcresult / test.log
+
+When the run_test.sh parser sees a failure like:
+
+```
+"The test runner timed out while preparing to run tests."
+```
+
+and the test.log shows the UITest process reached `Wait for <bundle> to idle` but never got past it, check `test.log` for the `PatrolServer: INFO: Server started` line — if that appears but there is no corresponding `PatrolAppServiceClient: connected` line, the app-under-test never made it past dyld, which means Issue 16.
+
+**Loop Phase:** [1] Prepare environment — category **5-A** (missing runtime dependency blocks app launch)
+
+---
+
 ## Common Errors to Avoid — Prohibited Actions
 
 The following actions are frequently attempted but are incorrect. They either mask the real problem, introduce new problems, or waste iterations.
@@ -551,3 +862,8 @@ find ~/Library/Developer/Xcode/DerivedData -name "*.xcresult" -newer /tmp -maxde
 | Issue 9 — arm64 architecture mismatch (Apple Silicon) | [2] Build | 5-A |
 | Issue 10 — DerivedData stale cache | [2] Build | 5-D |
 | Issue 11 — com.apple.provenance xattr signing error | [2] Build | 5-D |
+| Issue 12 — `Module 'patrol' not found` in RunnerUITests | [1] Prepare | 5-A |
+| Issue 13 — CocoaPods fails on `objectVersion '70'` (Xcode 26+) | [1] Prepare | 5-D |
+| Issue 14 — `ENABLE_USER_SCRIPT_SANDBOXING = YES` denies script writes | [2] Build | 5-A |
+| Issue 15 — "Clone 1/2/3" sims spawned (Xcode parallel testing) | [1] Prepare | 5-D |
+| Issue 16 — `_Testing_Foundation.framework` / `lib_TestingInterop.dylib` not loaded (Xcode 26) | [1] Prepare | 5-A |
