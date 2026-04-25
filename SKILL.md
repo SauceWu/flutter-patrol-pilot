@@ -1,9 +1,9 @@
 ---
-name: flutter-ios-agent-test
+name: flutter-patrol-pilot
 description: Run Flutter Patrol tests on iOS simulator and auto-fix Dart until they pass. Triggers on "test Flutter on simulator", "验证 Flutter 功能", "跑通流程", Patrol failures. Accepts .dart tests, natural-language, or Markdown specs. Not for Android-only, Flutter web, or non-Flutter iOS.
 ---
 
-# Flutter iOS Agent Test
+# Flutter Patrol Pilot
 
 Build a Flutter app, install it on an iOS simulator, run tests, and iteratively fix code until tests pass — or stop cleanly when human help is needed.
 

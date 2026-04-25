@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-parse_failure.py — xcresult failure extractor for flutter-ios-agent-test.
+parse_failure.py — xcresult failure extractor for flutter-patrol-pilot.
 
 Usage:
   python3 parse_failure.py <xcresult_path> [--log <patrol_log>] [--out <json_file>]

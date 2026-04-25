@@ -1,7 +1,7 @@
 ## Flutter iOS Testing Skill
 
 > Copy this entire block into your project's CLAUDE.md to enable automatic Patrol test execution on iOS simulator.
-> Replace `<PATH_TO_SKILL>` with the actual path to the flutter-ios-agent-test skill directory.
+> Replace `<PATH_TO_SKILL>` with the actual path to the flutter-patrol-pilot skill directory.
 
 ---
 

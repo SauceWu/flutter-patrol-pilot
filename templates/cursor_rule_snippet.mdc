@@ -1,5 +1,5 @@
 ---
-description: Route Flutter iOS Patrol test + auto-fix requests to the flutter-ios-agent-test skill. Triggers on "test Flutter on simulator", "验证 Flutter 功能", "跑通流程", Patrol test failures, and auto-fix iteration requests.
+description: Route Flutter iOS Patrol test + auto-fix requests to the flutter-patrol-pilot skill. Triggers on "test Flutter on simulator", "验证 Flutter 功能", "跑通流程", Patrol test failures, and auto-fix iteration requests.
 globs:
   - pubspec.yaml
   - patrol_test/**
@@ -11,7 +11,7 @@ alwaysApply: false
 
 # Flutter iOS Testing (Patrol)
 
-> This is a Cursor Project Rule that routes Flutter iOS testing tasks to the `flutter-ios-agent-test` skill.
+> This is a Cursor Project Rule that routes Flutter iOS testing tasks to the `flutter-patrol-pilot` skill.
 > Replace `<PATH_TO_SKILL>` below with the absolute or workspace-relative path to the cloned skill directory.
 
 **Skill location:** `<PATH_TO_SKILL>/SKILL.md`

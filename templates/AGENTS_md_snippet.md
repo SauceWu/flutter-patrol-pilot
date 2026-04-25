@@ -1,7 +1,7 @@
 # AGENTS.md snippet — Flutter iOS Testing (Patrol)
 
 > Copy the block below into your project's `AGENTS.md` (supported by Cursor, OpenAI Codex, and other AGENTS-aware agents).
-> Replace `<PATH_TO_SKILL>` with the absolute or workspace-relative path to the cloned `flutter-ios-agent-test` skill directory.
+> Replace `<PATH_TO_SKILL>` with the absolute or workspace-relative path to the cloned `flutter-patrol-pilot` skill directory.
 > If your project already has `AGENTS.md`, append this as a new section; do not overwrite existing content.
 
 ---
@@ -88,7 +88,7 @@ iter N/6 · build ok · X/Y tests pass · fixing 5-C in file.dart
 
 1. Create or edit `AGENTS.md` in your project root.
 2. Paste the markdown block above (between the ` ```markdown ``` ` fences).
-3. Replace `<PATH_TO_SKILL>` with the actual path — e.g. `~/.claude/skills/flutter-ios-agent-test`.
+3. Replace `<PATH_TO_SKILL>` with the actual path — e.g. `~/.claude/skills/flutter-patrol-pilot`.
 4. Cursor reads `AGENTS.md` automatically on chat start.
 
 ### OpenAI Codex / other AGENTS-aware agents

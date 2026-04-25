@@ -7,6 +7,13 @@ Versions are not published as git tags yet; the `v0.x` strings referenced in `RE
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed skill from `flutter-ios-agent-test` to `flutter-patrol-pilot`.** The old name was ambiguous: `agent-test` could be read as "tests for agents" rather than "an agent-driven test runner". The new name foregrounds Patrol (the actual underlying framework) and `pilot` (the auto-driving iteration loop) — closer to what the skill actually does. Existing users need to:
+  1. `mv ~/.claude/skills/flutter-ios-agent-test ~/.claude/skills/flutter-patrol-pilot`
+  2. Update any project-level `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/*.mdc` references to the new path.
+  3. The activation trigger phrases are unchanged; agents already wired up via trigger words will keep working.
+
 ## [v0.3] — 2026-04
 
 Major release: full project bootstrap + two new bug-class workarounds for Xcode 26 / patrol_cli 4.3.x.
