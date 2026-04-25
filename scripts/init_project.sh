@@ -17,9 +17,9 @@
 #   4. Infer app_name / bundle_id / package_name from existing project files
 #   5. Patch pubspec.yaml: add `patrol` dev_dependency + `patrol:` config block
 #   6. Patch ios/Podfile: platform 13.0, use_modular_headers!, RunnerUITests target
-#   7. Patch ios/Runner.xcodeproj/project.pbxproj:
+#   7. Patch ios/Runner.xcodeproj/project.pbxproj VIA xcodeproj gem (NOT sed):
 #        - objectVersion 70 → 60 (Xcode 26 + CocoaPods 1.16.x compat)
-#        - ENABLE_USER_SCRIPT_SANDBOXING = YES → NO everywhere
+#        - ENABLE_USER_SCRIPT_SANDBOXING = YES → NO across all build_configurations
 #   8. Create RunnerUITests target via ruby + xcodeproj gem (if missing)
 #      (includes: PBXNativeTarget, RunnerUITests.m, Info.plist, TEST_TARGET_NAME,
 #       target dependency on Runner, framework/resources phases)
@@ -349,33 +349,72 @@ fi
 # ── Step 7: patch project.pbxproj (Xcode 26 compat) ───────────────────────────
 _say "Step 7/13: project.pbxproj (Xcode 26 compat)"
 
-PBXPROJ=ios/Runner.xcodeproj/project.pbxproj
 PBXPROJ_CHANGED=0
 
-# 7a. objectVersion 70 → 60 (CocoaPods xcodeproj gem can't parse 70)
-if grep -qE 'objectVersion = 70;' "$PBXPROJ" 2>/dev/null; then
-  if [ "$DRY_RUN" = "1" ]; then
-    _say "  DRY-RUN would downgrade objectVersion 70 → 60"
-  else
-    sed -i '' 's/objectVersion = 70;/objectVersion = 60;/g' "$PBXPROJ"
-    _say "  objectVersion 70 → 60"
+# Both Xcode-26 fixes are applied via the xcodeproj gem (CocoaPods' own
+# pbxproj parser) instead of sed. The gem reads/writes pbxproj structurally,
+# so it's robust against whitespace / ordering / format drift that can break
+# regex patches across Xcode versions. Unexpected gem output → WARNING (not
+# fatal) since these are safety-net edits, not mandatory for a clean project.
+if [ "$DRY_RUN" = "1" ]; then
+  WOULD=$(ruby -r xcodeproj -e "
+project = Xcodeproj::Project.open('ios/Runner.xcodeproj')
+parts = []
+parts << \"objectVersion #{project.object_version} → 60\" if project.object_version.to_i > 60
+sb = (project.root_object.build_configurations + project.targets.flat_map(&:build_configurations)).count { |c| c.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] == 'YES' }
+parts << \"ENABLE_USER_SCRIPT_SANDBOXING YES→NO on #{sb} configs\" if sb > 0
+puts(parts.empty? ? 'nothing to change' : parts.join('; '))
+" 2>&1)
+  _say "  DRY-RUN $WOULD"
+else
+  GEM_OUTPUT=$(ruby -r xcodeproj <<'RUBY' 2>&1
+project = Xcodeproj::Project.open('ios/Runner.xcodeproj')
+changed = []
+
+# 7a. objectVersion: Xcode 26 writes 70; CocoaPods xcodeproj < 1.27 can't parse it.
+current_ov = project.object_version.to_s
+if current_ov.to_i > 60
+  begin
+    project.object_version = '60'
+  rescue NoMethodError
+    project.instance_variable_set(:@object_version, '60')
+  end
+  changed << "objectVersion #{current_ov} → 60"
+end
+
+# 7b. ENABLE_USER_SCRIPT_SANDBOXING: Xcode 26 defaults YES; Flutter scripts
+#     need to write to build/, so flip every YES → NO across project + targets.
+sb_flipped = 0
+all_configs = project.root_object.build_configurations +
+              project.targets.flat_map(&:build_configurations)
+all_configs.each do |config|
+  if config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] == 'YES'
+    config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+    sb_flipped += 1
+  end
+end
+changed << "ENABLE_USER_SCRIPT_SANDBOXING YES→NO on #{sb_flipped} configs" if sb_flipped > 0
+
+if changed.any?
+  project.save
+  changed.each { |c| STDERR.puts "  #{c}" }
+  puts 'CHANGED'
+else
+  puts 'UNCHANGED'
+end
+RUBY
+)
+  if printf '%s\n' "$GEM_OUTPUT" | grep -q '^CHANGED$'; then
     PBXPROJ_CHANGED=1
+  elif printf '%s\n' "$GEM_OUTPUT" | grep -q '^UNCHANGED$'; then
+    : # already at desired state
+  else
+    echo "[init] WARNING: xcodeproj gem patch returned unexpected output:" >&2
+    printf '%s\n' "$GEM_OUTPUT" >&2
   fi
 fi
 
-# 7b. ENABLE_USER_SCRIPT_SANDBOXING = YES → NO
-# Xcode 26 adds this to new targets; Flutter's scripts need to write to build/.
-if grep -qE 'ENABLE_USER_SCRIPT_SANDBOXING = YES' "$PBXPROJ" 2>/dev/null; then
-  if [ "$DRY_RUN" = "1" ]; then
-    _say "  DRY-RUN would flip ENABLE_USER_SCRIPT_SANDBOXING YES → NO"
-  else
-    sed -i '' 's/ENABLE_USER_SCRIPT_SANDBOXING = YES/ENABLE_USER_SCRIPT_SANDBOXING = NO/g' "$PBXPROJ"
-    _say "  sandboxing YES → NO"
-    PBXPROJ_CHANGED=1
-  fi
-fi
-
-[ "$PBXPROJ_CHANGED" = "1" ] && _changed "ios/Runner.xcodeproj/project.pbxproj (xcode26 fixes)"
+[ "$PBXPROJ_CHANGED" = "1" ] && _changed "ios/Runner.xcodeproj/project.pbxproj (xcode26 fixes via xcodeproj gem)"
 
 # ── Step 8: create RunnerUITests target via xcodeproj gem (if missing) ────────
 _say "Step 8/13: RunnerUITests target"

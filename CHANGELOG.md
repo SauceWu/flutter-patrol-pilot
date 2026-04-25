@@ -17,6 +17,8 @@ Versions are not published as git tags yet; the `v0.x` strings referenced in `RE
 
 ### Changed
 
+- **`init_project.sh` Step 7 now uses the `xcodeproj` gem instead of `sed` for both Xcode-26 pbxproj fixes** (`objectVersion 70 → 60`, `ENABLE_USER_SCRIPT_SANDBOXING YES → NO`). The gem is CocoaPods' own pbxproj parser, robust against whitespace / ordering / format drift that breaks regex patches across Xcode versions. The sandboxing fix now flips the setting across **every** target's build_configurations + the project root's, instead of relying on a literal-text sed match. `objectVersion` uses `instance_variable_set(:@object_version, '60')` because xcodeproj 1.27.x exposes it as reader-only (verified: setter raises `NoMethodError`, instance var write is honored on `project.save`). Unexpected gem output is logged as a `WARNING` (non-fatal — these patches are safety nets, not mandatory). README §"手工 setup" updated with the ruby/gem one-liner alongside the legacy sed for emergency debugging.
+
 ## [v0.3] — 2026-04
 
 Major release: full project bootstrap + two new bug-class workarounds for Xcode 26 / patrol_cli 4.3.x.
