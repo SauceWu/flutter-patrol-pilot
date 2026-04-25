@@ -71,6 +71,9 @@ FINDER_CALL_RE = re.compile(
 # Signal patterns aligned to failure-triage.md Section 2 Quick-Reference Signal Table.
 # Order matters: check most-specific signals first to avoid false matches.
 SIGNAL_PATTERNS = [
+    ("_Testing_Foundation.framework",       "xcode26_swift_testing_deps_missing"),
+    ("lib_TestingInterop.dylib",            "xcode26_swift_testing_deps_missing"),
+    ("test runner timed out while preparing", "xcode26_swift_testing_deps_missing"),
     ("WaitUntilVisibleTimeoutException",    "WaitUntilVisibleTimeoutException"),
     ("WaitUntilExistsTimeoutException",     "WaitUntilExistsTimeoutException"),
     ("pumpAndSettle timed out",             "pumpAndSettle timed out"),
