@@ -643,10 +643,34 @@ else
   fi
 fi
 
+# ── axe optional check (sim_snapshot.sh --tree dependency) ───────────────────
+# AXe is OPTIONAL — sim_snapshot.sh falls back to screenshot if absent.
+# init MUST NOT install axe automatically (SKILL.md "no global install without
+# consent" rule). Surface it as an OPTIONAL next_step so the agent asks the user.
+if command -v axe >/dev/null 2>&1; then
+  AXE_PRESENT=1
+else
+  AXE_PRESENT=0
+  _say "[axe] not installed — sim_snapshot.sh --tree will fall back to screenshot."
+  _say "[axe]   to install (with user consent), run: bash <skill>/scripts/install_axe.sh"
+fi
+
 # ── summary JSON ──────────────────────────────────────────────────────────────
 SUMMARY=$(python3 -c "
 import sys, json
 changes = sys.argv[1:]
+axe_present = bool(int('$AXE_PRESENT'))
+next_steps = [
+  'Boot a simulator: xcrun simctl boot <UDID>',
+  'Build + install:  bash <skill>/scripts/build.sh --sim <UDID> --target patrol_test/smoke_test.dart',
+  'Run tests:        bash <skill>/scripts/run_test.sh --sim <UDID> --target patrol_test/smoke_test.dart',
+  'The scaffolded smoke test has an intentional typo — agent must triage + fix it on first run.',
+]
+if not axe_present:
+  next_steps.append(
+    'OPTIONAL: install AXe for cheaper a11y triage (sim_snapshot.sh --tree). '
+    'Ask the user first, then run: bash <skill>/scripts/install_axe.sh'
+  )
 print(json.dumps({
   'success': True,
   'dry_run': bool(int('$DRY_RUN')),
@@ -655,13 +679,9 @@ print(json.dumps({
   'bundle_id': '$BUNDLE_ID',
   'package_name': '$PACKAGE_NAME',
   'patrol_version': '$PATROL_VERSION',
+  'axe_present': axe_present,
   'changes': changes,
-  'next_steps': [
-    'Boot a simulator: xcrun simctl boot <UDID>',
-    'Build + install:  bash <skill>/scripts/build.sh --sim <UDID> --target patrol_test/smoke_test.dart',
-    'Run tests:        bash <skill>/scripts/run_test.sh --sim <UDID> --target patrol_test/smoke_test.dart',
-    'The scaffolded smoke test has an intentional typo — agent must triage + fix it on first run.'
-  ]
+  'next_steps': next_steps,
 }))
 " ${CHANGES[@]+"${CHANGES[@]}"})
 

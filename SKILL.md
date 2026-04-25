@@ -49,6 +49,7 @@ Build a Flutter app, install it on an iOS simulator, run tests, and iteratively 
 - `scripts/run_test.sh` — runs the prebuilt test bundle via `xcodebuild test-without-building` with parallel testing disabled (v0.3+ default); falls back to `patrol test` only with `--use-patrol`. Emits structured JSON.
 - `scripts/parse_failure.py` — extract failure signal from xcresult/logs into JSON.
 - `scripts/sim_snapshot.sh` — screenshot + a11y tree. **Use only when triage is inconclusive.**
+- `scripts/install_axe.sh` — install AXe CLI (optional dep for `sim_snapshot.sh --tree`). **Run only after explicit user consent** — see §"Optional: AXe CLI" below.
 - `templates/patrol_test_template.dart` — starting point for generated tests.
 - `templates/CLAUDE_md_snippet.md` — project-level activation for Claude Code / Claude Desktop (paste into `CLAUDE.md`).
 - `templates/AGENTS_md_snippet.md` — project-level activation for Cursor / OpenAI Codex / other AGENTS-aware agents (paste into `AGENTS.md`).
@@ -79,5 +80,21 @@ bash <skill>/scripts/init_project.sh
 ```
 
 It is idempotent — safe to re-run to repair a partially-configured project. Pass `--dry-run` first if you want to see what it will change. See README §"Patrol 4.x 项目一次性 setup" for the full step table.
+
+## Optional: AXe CLI (for token-cheap a11y trees)
+
+`sim_snapshot.sh --tree` uses [`axe`](https://github.com/cameroncooke/AXe) to dump the iOS simulator's accessibility tree as compact text — typically **~10× cheaper in tokens** than a screenshot for triage purposes. AXe is **optional**: if missing, `sim_snapshot.sh` automatically falls back to a screenshot and tags the JSON output with `warning: "axe not installed..."`.
+
+**Agent contract for AXe:**
+
+- Do **not** install AXe silently. The "do not auto-install globally without asking" rule above applies.
+- `init_project.sh` reports AXe presence in its summary JSON as `axe_present: bool` and, when missing, appends an `OPTIONAL:` entry to `next_steps[]`.
+- When you (the agent) hit a category 5-E (inconclusive) failure and decide to call `sim_snapshot.sh --tree`, **first check** the latest `init_project.sh` summary or run `command -v axe`:
+  - If `axe` is present → just call `sim_snapshot.sh --tree`.
+  - If `axe` is absent → **ask the user** something like: *"AXe isn't installed. Want me to install it via Homebrew (`brew install cameroncooke/axe/axe`) so a11y trees are ~10× cheaper than screenshots? Yes / No / Just use screenshot."*
+    - On **Yes** → `bash <skill>/scripts/install_axe.sh`, then proceed with `--tree`.
+    - On **No / Just use screenshot** → call `sim_snapshot.sh --tree` anyway; it'll fall back to screenshot and warn. Do not ask again in the same session.
+
+`install_axe.sh` is idempotent: re-running when AXe is already installed is a no-op (`action: "noop"`). Use `--dry-run` to preview, `--force` to reinstall.
 
 If any prerequisite is missing, stop and tell the user exactly what to install. Do not try to auto-install globally without asking.

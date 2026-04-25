@@ -10,6 +10,10 @@ Versions are not published as git tags yet; the `v0.x` strings referenced in `RE
 ### Added
 
 - **Nickname `fpp`** registered in `SKILL.md` frontmatter `description`. Agent now activates this skill on short invocations like `fpp` / `run fpp` / `/fpp` / `跑一下 fpp` / `用 fpp 验证一下` in addition to the existing English/Chinese trigger phrases. Skill directory / `name` field is unchanged (still `flutter-patrol-pilot`) to preserve client path conventions. README §"昵称: `fpp`" documents the full list of supported invocations.
+- **`scripts/install_axe.sh`** — opt-in installer for [AXe CLI](https://github.com/cameroncooke/AXe) (the optional dependency that makes `sim_snapshot.sh --tree` ~10× cheaper than a screenshot). Wraps `brew install cameroncooke/axe/axe`; idempotent (already-installed → `action: "noop"`); supports `--dry-run` and `--force`. **Never invoked automatically by the skill** — `SKILL.md` §"Optional: AXe CLI" requires the agent to ask the user *"want me to install AXe via Homebrew?"* before running it. Falls back to a clean error JSON if `brew` is missing. Stdout is a single-line JSON object (`success` / `action` / `axe_path` / `axe_version` / `elapsed_s` / `error`).
+- **`init_project.sh` summary now reports `axe_present: bool`** and, when AXe is missing, appends an `OPTIONAL:` entry to `next_steps[]` pointing at `install_axe.sh` with an explicit "ask the user first" instruction. Stays consistent with the existing "do not auto-install globally" rule.
+- **README §"可选: AXe CLI(让 a11y triage 更省 token)"** documents the install path, the agent-side consent contract, and what happens if you skip it (graceful screenshot fallback).
+- **`SKILL.md` §"Optional: AXe CLI"** spells out the agent-side contract: when about to call `sim_snapshot.sh --tree` and `axe` is absent, the agent must ask the user once per session before invoking `install_axe.sh`. On refusal, fall back to screenshot and don't ask again.
 
 ### Changed
 
