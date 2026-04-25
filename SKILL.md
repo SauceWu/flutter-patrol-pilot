@@ -1,6 +1,6 @@
 ---
 name: flutter-patrol-pilot
-description: Run Flutter Patrol tests on iOS simulator and auto-fix Dart until they pass. Triggers on "test Flutter on simulator", "验证 Flutter 功能", "跑通流程", Patrol failures. Accepts .dart tests, natural-language, or Markdown specs. Not for Android-only, Flutter web, or non-Flutter iOS.
+description: Run Flutter Patrol tests on iOS simulator and auto-fix Dart until they pass. Nickname "fpp" — users may invoke this skill with short phrases like "fpp", "run fpp", "use fpp", "/fpp", "跑一下 fpp", "用 fpp 验证一下", "fpp 跑通流程"; treat any of these as an explicit activation request. Also triggers on "test Flutter on simulator", "验证 Flutter 功能", "跑通流程", Patrol failures. Accepts .dart tests, natural-language, or Markdown specs. Not for Android-only, Flutter web, or non-Flutter iOS.
 ---
 
 # Flutter Patrol Pilot

@@ -7,12 +7,11 @@ Versions are not published as git tags yet; the `v0.x` strings referenced in `RE
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- **Renamed skill from `flutter-ios-agent-test` to `flutter-patrol-pilot`.** The old name was ambiguous: `agent-test` could be read as "tests for agents" rather than "an agent-driven test runner". The new name foregrounds Patrol (the actual underlying framework) and `pilot` (the auto-driving iteration loop) — closer to what the skill actually does. Existing users need to:
-  1. `mv ~/.claude/skills/flutter-ios-agent-test ~/.claude/skills/flutter-patrol-pilot`
-  2. Update any project-level `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/*.mdc` references to the new path.
-  3. The activation trigger phrases are unchanged; agents already wired up via trigger words will keep working.
+- **Nickname `fpp`** registered in `SKILL.md` frontmatter `description`. Agent now activates this skill on short invocations like `fpp` / `run fpp` / `/fpp` / `跑一下 fpp` / `用 fpp 验证一下` in addition to the existing English/Chinese trigger phrases. Skill directory / `name` field is unchanged (still `flutter-patrol-pilot`) to preserve client path conventions. README §"昵称: `fpp`" documents the full list of supported invocations.
+
+### Changed
 
 ## [v0.3] — 2026-04
 

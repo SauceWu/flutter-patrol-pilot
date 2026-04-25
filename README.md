@@ -55,6 +55,15 @@ git clone <this-repo-url> ~/.claude/skills/flutter-patrol-pilot
 
 装完无需额外配置 — agent 看到 `"test Flutter on simulator"` / `"验证 Flutter 功能"` / `"跑通流程"` / `"Patrol failures"` 等触发词时会自动激活。
 
+### 昵称: `fpp`
+
+`flutter-patrol-pilot` 每次敲全名太长,所以 `SKILL.md` 的 `description` 里登记了昵称 **`fpp`**。直接用下面任一说法就能唤醒 skill,无需记全名:
+
+- `fpp` / `run fpp` / `use fpp` / `/fpp`
+- `跑一下 fpp` / `用 fpp 验证一下` / `fpp 跑通流程`
+
+skill 目录名(= `name` 字段)依然是 `flutter-patrol-pilot` —— 改目录名会破坏客户端的路径约定,所以只在 `description` 加触发短语。想再加昵称,编辑 `SKILL.md` 第一段 frontmatter 的 `description` 即可。
+
 ### 方式二:项目级接入(只在当前仓库激活,精确控制触发范围)
 
 仓库根目录下的 `templates/` 提供三种 snippet,对应三种项目级入口:
