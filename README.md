@@ -114,8 +114,8 @@ skill 顶层 `SKILL.md` 明确禁止:
 ```
 flutter-ios-agent-test/
 ├── SKILL.md                       # skill 主入口(带 Agent 触发描述)
-├── PLAN.md                        # 本 skill 的设计决策 + smoke test 记录
 ├── README.md                      # 本文件
+├── CHANGELOG.md                   # 版本变更日志(v0.1 / v0.2 / v0.3)
 ├── reference/
 │   ├── iteration-protocol.md      # 核心状态机 + 停止条件
 │   ├── failure-triage.md          # 信号 → 类别 → 动作 查找表(5-A ~ 5-E)
@@ -124,7 +124,7 @@ flutter-ios-agent-test/
 ├── scripts/
 │   ├── boot_sim.sh                # 幂等启动模拟器 → JSON
 │   ├── build.sh                   # patrol build + install → JSON
-│   ├── run_test.sh                # patrol test + xcresult parse → JSON
+│   ├── run_test.sh                # xcodebuild test-without-building (无 sim clone) + xcresult parse → JSON
 │   ├── parse_failure.py           # xcresult/log → 结构化失败数组
 │   └── sim_snapshot.sh            # a11y tree(默认) / screenshot(按需)
 └── templates/
@@ -146,7 +146,7 @@ Skill 在第一次运行时会自动验证并缓存:
 
 ### fvm 项目自动支持
 
-`scripts/build.sh` 和 `scripts/run_test.sh` 启动时会从当前目录向上最多 5 层查找 `.fvm/flutter_sdk/bin`,找到就 prepend 到 `PATH`。这意味着:
+`scripts/build.sh` 和 `scripts/run_test.sh` 启动时会从当前目录向上最多 8 层查找 `.fvm/flutter_sdk/bin`(monorepo/example 布局下 fvm 常挂在 repo 根),找到就 prepend 到 `PATH`。这意味着:
 
 - **在 fvm 管理的项目里不需要任何额外配置** —— skill 会自动用 `.fvmrc` 锁定的 Flutter 版本而不是系统全局版本
 - 在 monorepo 里从子目录(例如 `example/`)触发也 work,只要根目录有 `.fvm/flutter_sdk`
@@ -155,22 +155,62 @@ Skill 在第一次运行时会自动验证并缓存:
 
 检测成功时会在 stderr 打印 `[fvm] using /path/to/.fvm/flutter_sdk`,方便调试。
 
-## Patrol 4.x 项目一次性 setup(skill 管不到的部分)
+## Patrol 4.x 项目一次性 setup
 
-Patrol 4.x 需要在 iOS 侧做一次性手工配置,之后 skill 全自动。未配置时 skill 会返回:
+### 推荐:一键 init(skill v0.3+)
 
+在 Flutter 项目根目录(含 `pubspec.yaml` + `ios/Runner.xcodeproj`)跑:
+
+```bash
+bash <skill>/scripts/init_project.sh
 ```
-xcresult issue: Tests in the target "RunnerUITests" can't be run because
-"RunnerUITests" isn't a member of the specified test plan or scheme.
+
+`init_project.sh` 是**幂等**的,每一步先检查"已做过就跳过",踩过的所有坑都一次性修好:
+
+| Step | 做什么 | 对应 Issue |
+|---|---|---|
+| 1 | preflight:验证 Flutter 项目结构 + ruby/xcodeproj/xcodebuild 可用 | — |
+| 2 | 向上 8 层查找 `.fvm/flutter_sdk` 并 prepend PATH(monorepo/example) | — |
+| 3 | 把 `~/.pub-cache/bin` append 到 PATH | — |
+| 4 | 从 `pubspec.yaml` / `project.pbxproj` / `build.gradle` 推断 `app_name` / `bundle_id` / `package_name` | — |
+| 5 | `pubspec.yaml`:加 `patrol` dev_dep + `patrol:` 配置块 | — |
+| 6 | `ios/Podfile`:`platform :ios, '13.0'` + `use_modular_headers!` + `target 'RunnerUITests'` | Issue 12 |
+| 7 | `ios/Runner.xcodeproj/project.pbxproj`:`objectVersion 70 → 60`,`ENABLE_USER_SCRIPT_SANDBOXING YES → NO` | Issue 13, 14 |
+| 8 | `xcodeproj` gem 自动建 `RunnerUITests` UI Test Bundle target(含 Info.plist / build settings / target dependency on Runner) | Issue 12 |
+| 9 | 写 `ios/RunnerUITests/RunnerUITests.m` 的 5 行 Patrol bootstrap | Issue 12 |
+| 10 | `Runner.xcscheme`:`parallelizable="YES" → "NO"` + 确保 RunnerUITests 在 `<Testables>` 里 | Issue 15 |
+| 11 | 脚手架 `patrol_test/smoke_test.dart`(带 intentional typo,给 agent 一个 5-D 分类练手题) | — |
+| 12 | `.gitignore`:加 `patrol_test/test_bundle.dart`、`integration_test/test_bundle.dart`、`.test-results/` | — |
+| 13 | `patrol_cli` 重激活(用 fvm dart 如果检测到)+ `flutter pub get` + `cd ios && pod install` | — |
+
+失败时用 `reference/troubleshooting.md` 里编号的 Issue 定位。
+
+**常用参数:**
+```bash
+bash <skill>/scripts/init_project.sh --dry-run            # 打印"会改什么",一个字节都不动
+bash <skill>/scripts/init_project.sh --skip-pod-install   # 已知 pod install 会挂,先跳过
+bash <skill>/scripts/init_project.sh --skip-pub-get       # 同上
+bash <skill>/scripts/init_project.sh --patrol-version "^4.5.0"   # 固定版本
+bash <skill>/scripts/init_project.sh \
+    --app-name foo --bundle-id com.acme.foo --package-name com.acme.foo
 ```
 
-这时按下面一次:
+stdout 最后一行是 JSON summary(`success`、`changes[]`、`next_steps[]`),适合 agent 消费。
 
-1. `flutter pub add --dev patrol`
-2. `cd ios && pod install`
-3. Xcode 打开 `ios/Runner.xcworkspace` → Product → Scheme → Edit Scheme → Test → `+` → 选 `RunnerUITests`
-4. Xcode 的 File Inspector 里把 scheme 标成 Shared(勾 `Shared`),commit `ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme`
-5. Podfile 的 `platform :ios, '13.0'` 取消注释并设 ≥ 13.0
+### 别在 Xcode 里 Cmd+B 编 RunnerUITests
+
+`PATROL_INTEGRATION_TEST_IOS_RUNNER` 宏依赖 `-D CLEAR_PERMISSIONS=...` / `-D FULL_ISOLATION=...`,这俩 flag 只有 `patrol build` / `patrol test` 会自动注入,**Xcode GUI 永远编不过这个 target**。调试时用 `scripts/build.sh`。
+
+### 手工 setup(懂了再动,否则用 `init_project.sh`)
+
+如果想手改/CI 不能跑 ruby/想确认每步动了什么,对应文档:
+
+1. 加依赖: `flutter pub add --dev patrol && dart pub global activate patrol_cli`(fvm 项目用 `fvm dart pub global activate patrol_cli`)
+2. Podfile: 见 `init_project.sh` Step 6 —— 必须 `use_modular_headers!` + `target 'RunnerUITests' do inherit! :complete end`
+3. Xcode target:File → New → Target → UI Testing Bundle(Objective-C,Target to be Tested = Runner)。建完把 `RunnerUITests.m` 替换成 5 行 Patrol 样板。Product → Scheme → Edit Scheme → Test → `+ RunnerUITests` → 勾 Shared
+4. Xcode 26 特殊:`sed -i '' 's/ENABLE_USER_SCRIPT_SANDBOXING = YES/NO/g'` 和 `sed -i '' 's/objectVersion = 70;/objectVersion = 60;/'` 都打 `ios/Runner.xcodeproj/project.pbxproj`
+5. Runner.xcscheme:`sed -i '' 's/parallelizable = "YES"/parallelizable = "NO"/g' ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme` —— **不关这个会 clone sim**(Issue 15)
+6. `cd ios && pod install && cd .. && patrol doctor` 收尾
 
 之后所有迭代全程 skill 自己跑。
 
@@ -190,7 +230,9 @@ Simulator / xcresult / Flutter build 的原始 log 是 token 杀手,skill 默认
 - 当前脚本主打 iOS 模拟器;真机需要 signing / provisioning 配置,skill 只做 triage 不代改
 - 自然语言 → Patrol 测试的生成依赖 agent 的 Patrol 语法知识 + `patrol-patterns.md` 速查,复杂交互(permissions / deep links / background app)需要人工 review 生成的测试
 - `sim_snapshot.sh --tree` 需要 [`axe`](https://github.com/cameroncooke/AXe) CLI;未装时自动 fallback 到 screenshot 并在 `warning` 字段标记
-- Patrol CLI 目前不支持 `-destination "id=<UDID>"`,只用 `name=<X>,OS=latest`;sim runtime 和 Xcode SDK 版本必须匹配
+- **`patrol test` 会触发 Xcode 并行测试 → 克隆出 `Clone 1/2/3` 模拟器**。`xcodebuild test-without-building` 默认 `-parallel-testing-enabled YES`,而 patrol_cli 4.3.x 既不关它,也用 `-destination name=<X>` 而不是 `id=<UDID>`(见 `~/.pub-cache/hosted/pub.dev/patrol_cli-*/lib/src/crossplatform/app_options.dart`)。**本 skill 从 v0.3 起默认绕开 `patrol test`**:`scripts/run_test.sh` 直接用 `patrol build` 产物调 `xcodebuild test-without-building`,主动加 `-parallel-testing-enabled NO -disable-concurrent-destination-testing -destination id=<UDID> -only-testing RunnerUITests/RunnerUITests`,并注入 `TEST_RUNNER_PATROL_{TEST,APP}_PORT=8081/8082`。`scripts/build.sh` 同时把 xctestrun 里 `ParallelizationEnabled` patch 成 `false` 作为冗余防线。只有显式 `--use-patrol` 才会回落到旧路径(此时会重新暴露 clone/同名 bug)。详见 `reference/troubleshooting.md` Issue 15
+- 强烈建议把 `ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme` 里两处 `parallelizable = "YES"` 改成 `"NO"` 并提交,让 Xcode UI 跑测试时也不克隆
+- **Xcode 26 + Flutter 下 `Runner.app` 会 dyld 崩溃**(症状:XCUI 卡在 `Wait for <bundle> to idle` 6 分钟后报 `The test runner timed out while preparing to run tests`)。Xcode 26 / Swift 6.1 加的 Swift Testing 运行时依赖 `_Testing_Foundation.framework` / `_Testing_CoreGraphics` / `_Testing_CoreImage` / `_Testing_UIKit` 和 `lib_TestingInterop.dylib`,但 Flutter 的构建流水线**不会**把它们 embed 进 `Runner.app/Frameworks/`,iOS 26 sim runtime 也**不附带**。**本 skill 从 v0.3 起,`scripts/build.sh` 在 `xcrun simctl install` 之前自动从 Xcode 平台目录把这 5 个文件 copy 进 `Runner.app/Frameworks/` 和 `RunnerUITests-Runner.app/Frameworks/`**(同时 install 两个 app)。Xcode <26 时自动 no-op。诊断与手工 fix 见 `reference/troubleshooting.md` Issue 16
 
 ## 贡献
 
