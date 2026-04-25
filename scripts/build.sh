@@ -12,9 +12,11 @@ set -euo pipefail
 # ── fvm auto-detection ────────────────────────────────────────────────────────
 # If invoked from an fvm-managed project, prepend .fvm/flutter_sdk/bin to PATH
 # so `flutter` / `dart` resolve to the project-pinned version instead of the
-# system-wide one. Walks up at most 5 parent dirs to find .fvm/flutter_sdk.
+# system-wide one. Walks up the directory tree (up to 8 levels) because
+# monorepos commonly put `.fvm/` at the repo root and run builds from an
+# `example/` or `packages/<x>/` subdirectory.
 _fvm_dir="$PWD"
-for _i in 1 2 3 4 5; do
+for _i in 1 2 3 4 5 6 7 8; do
   if [ -d "$_fvm_dir/.fvm/flutter_sdk/bin" ]; then
     export PATH="$_fvm_dir/.fvm/flutter_sdk/bin:$PATH"
     echo "[fvm] using $_fvm_dir/.fvm/flutter_sdk" >&2
@@ -176,30 +178,120 @@ print(json.dumps(d))
   exit 1
 fi
 
-# ── find .app bundle ──────────────────────────────────────────────────────────
-APP_PATH=$(find build/ios_integ/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 -type d 2>/dev/null | head -1 || true)
+# ── find both .app bundles: the app-under-test (Runner.app) and the UITest
+# runner app (RunnerUITests-Runner.app). The XCUITest driver launches the
+# runner app, which in turn spawns XCUIApplication for the app-under-test, so
+# BOTH need to be installed on the sim and BOTH need the Xcode-26 Swift Testing
+# deps injected (the dyld-crash can originate from either side).
+PRODUCTS_DIR="build/ios_integ/Build/Products/Debug-iphonesimulator"
+APP_PATH=""          # the app-under-test (Runner.app)
+RUNNER_APP_PATH=""   # the UITest runner (RunnerUITests-Runner.app)
+
+if [ -d "$PRODUCTS_DIR/Runner.app" ]; then
+  APP_PATH=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$PRODUCTS_DIR/Runner.app")
+fi
+if [ -d "$PRODUCTS_DIR/RunnerUITests-Runner.app" ]; then
+  RUNNER_APP_PATH=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$PRODUCTS_DIR/RunnerUITests-Runner.app")
+fi
+
+if [ -z "$APP_PATH" ]; then
+  # Fallback: pick the first non-"RunnerUITests" .app
+  APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name "*.app" 2>/dev/null \
+    | grep -v "RunnerUITests" | head -1 || true)
+  [ -n "$APP_PATH" ] && APP_PATH=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$APP_PATH")
+fi
+
 if [ -z "$APP_PATH" ]; then
   ELAPSED=$(( SECONDS - START_SECONDS ))
   BUILD_LOG_ABS=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$BUILD_LOG_PATH" 2>/dev/null || echo "$BUILD_LOG_PATH")
-  printf '{"success":false,"udid":"%s","app_path":null,"bundle_id":null,"xcresult_path":null,"build_log_path":"%s","elapsed_s":%d,"error":{"stage":"build","summary":".app bundle not found in Debug-iphonesimulator","log_grep":[]}}\n' \
+  printf '{"success":false,"udid":"%s","app_path":null,"bundle_id":null,"xcresult_path":null,"build_log_path":"%s","elapsed_s":%d,"error":{"stage":"build","summary":"Runner.app bundle not found in Debug-iphonesimulator","log_grep":[]}}\n' \
     "$UDID" "$BUILD_LOG_ABS" "$ELAPSED"
   exit 1
 fi
-APP_PATH=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$APP_PATH" 2>/dev/null || echo "$APP_PATH")
 
 # ── extract bundle ID from Info.plist ─────────────────────────────────────────
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || true)
 if [ -z "$BUNDLE_ID" ]; then
-  # Fallback: defaults read
   BUNDLE_ID=$(defaults read "$APP_PATH/Info.plist" CFBundleIdentifier 2>/dev/null || true)
 fi
 [ -z "$BUNDLE_ID" ] && BUNDLE_ID="unknown"
 
+RUNNER_BUNDLE_ID=""
+if [ -n "$RUNNER_APP_PATH" ]; then
+  RUNNER_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$RUNNER_APP_PATH/Info.plist" 2>/dev/null || true)
+fi
+
+# ── Xcode 26+ Swift Testing dylib/framework injection (Issue 16) ──────────────
+# Xcode 26 / Swift 6.1 added a new "Swift Testing" runtime to the XCTest stack.
+# Runner.app ships with libXCTestSwiftSupport.dylib (embedded by Flutter), which
+# hard-depends on:
+#   - _Testing_Foundation.framework  (+ _Testing_CoreGraphics / _Testing_CoreImage
+#     / _Testing_UIKit, transitively pulled by the Swift stdlib glue)
+#   - lib_TestingInterop.dylib
+# Neither Flutter's build pipeline (`patrol build ios` → `flutter build ios
+# --debug --simulator`) nor the iOS 26.x simruntime ships these, so launching
+# Runner.app under iOS 26 dyld-crashes with:
+#
+#     Library not loaded: @rpath/_Testing_Foundation.framework/_Testing_Foundation
+#     (also: @rpath/lib_TestingInterop.dylib)
+#
+# XCUITest then hangs on "Wait for <bundle> to idle" for its full 6-minute
+# timeout and reports "The test runner timed out while preparing to run tests."
+#
+# Fix: copy the Simulator platform's copies into Runner.app/Frameworks before
+# `xcrun simctl install`, so the sim gets an app bundle with a self-contained
+# rpath. Idempotent (checks for existing files) and a no-op on Xcode <26.
+#
+# See: reference/troubleshooting.md Issue 16
+XCODE_PLATFORM_ROOT=$(xcrun --sdk iphonesimulator --show-sdk-platform-path 2>/dev/null || echo "")
+if [ -n "$XCODE_PLATFORM_ROOT" ]; then
+  XCODE_PLATFORM_FRAMEWORKS="$XCODE_PLATFORM_ROOT/Developer/Library/Frameworks"
+  XCODE_PLATFORM_USRLIB="$XCODE_PLATFORM_ROOT/Developer/usr/lib"
+  INJECTED=0
+  for target_app in "$APP_PATH" "$RUNNER_APP_PATH"; do
+    [ -z "$target_app" ] && continue
+    [ ! -d "$target_app" ] && continue
+    target_frameworks="$target_app/Frameworks"
+    mkdir -p "$target_frameworks"
+    for fw in _Testing_Foundation _Testing_CoreGraphics _Testing_CoreImage _Testing_UIKit; do
+      src="$XCODE_PLATFORM_FRAMEWORKS/$fw.framework"
+      dst="$target_frameworks/$fw.framework"
+      if [ -d "$src" ] && [ ! -d "$dst" ]; then
+        cp -R "$src" "$dst"
+        echo "[build.sh] injected $fw.framework → $(basename "$target_app")" >&2
+        INJECTED=$((INJECTED + 1))
+      fi
+    done
+    for dylib in lib_TestingInterop.dylib; do
+      src="$XCODE_PLATFORM_USRLIB/$dylib"
+      dst="$target_frameworks/$dylib"
+      if [ -f "$src" ] && [ ! -f "$dst" ]; then
+        cp "$src" "$dst"
+        echo "[build.sh] injected $dylib → $(basename "$target_app")" >&2
+        INJECTED=$((INJECTED + 1))
+      fi
+    done
+  done
+  [ "$INJECTED" -gt 0 ] && echo "[build.sh] Xcode-26 Swift Testing deps: injected $INJECTED file(s) across app bundles" >&2
+fi
+
 # ── install: uninstall first to avoid stale binary (Issue 8) ─────────────────
+# Install BOTH the app-under-test and (if present) the UITest runner app.
+# xcodebuild test-without-building needs the runner app pre-installed on the
+# sim — without it, XCUI spends minutes trying to install it on its own and
+# can time out before the Patrol handshake completes.
 echo "[build.sh] Installing $APP_PATH → $UDID (bundle: $BUNDLE_ID)..." >&2
 xcrun simctl uninstall "$UDID" "$BUNDLE_ID" 2>/dev/null || true
 xcrun simctl install "$UDID" "$APP_PATH"
 INSTALL_EXIT=$?
+
+if [ "$INSTALL_EXIT" -eq 0 ] && [ -n "$RUNNER_APP_PATH" ] && [ -n "$RUNNER_BUNDLE_ID" ]; then
+  echo "[build.sh] Installing $RUNNER_APP_PATH → $UDID (bundle: $RUNNER_BUNDLE_ID)..." >&2
+  xcrun simctl uninstall "$UDID" "$RUNNER_BUNDLE_ID" 2>/dev/null || true
+  xcrun simctl install "$UDID" "$RUNNER_APP_PATH" || {
+    echo "[build.sh] WARN: UITest runner app install returned non-zero; xcodebuild will retry" >&2
+  }
+fi
 
 if [ "$INSTALL_EXIT" -ne 0 ]; then
   ELAPSED=$(( SECONDS - START_SECONDS ))
@@ -210,6 +302,35 @@ if [ "$INSTALL_EXIT" -ne 0 ]; then
 fi
 
 echo "[build.sh] Install succeeded" >&2
+
+# ── patch xctestrun to disable Xcode test parallelization ─────────────────────
+# patrol_cli 4.3.x builds the xctestrun with `ParallelizationEnabled=<true/>`,
+# and its own xcodebuild invocation does NOT pass `-parallel-testing-enabled NO`.
+# With the default, Xcode CLONES the target simulator (producing "Clone 1/2/3"
+# sims) to parallelize test methods — noisy, slow, and often causes Patrol
+# native↔app port collisions. We flip the flag in the xctestrun so that
+# `xcodebuild test-without-building` (in run_test.sh) starts with a safe
+# default, even when parallel-testing is also disabled on the command line.
+XCTESTRUN=$(find build/ios_integ/Build/Products -maxdepth 1 -type f \
+  -name "Runner_iphonesimulator*.xctestrun" 2>/dev/null | sort -r | head -1 || true)
+if [ -n "$XCTESTRUN" ] && [ -f "$XCTESTRUN" ]; then
+  python3 - "$XCTESTRUN" <<'PY' >&2 || true
+import sys, plistlib, pathlib
+p = pathlib.Path(sys.argv[1])
+try:
+    d = plistlib.loads(p.read_bytes())
+    changed = 0
+    for k, v in d.items():
+        if isinstance(v, dict) and v.get('ParallelizationEnabled') is not False:
+            v['ParallelizationEnabled'] = False
+            changed += 1
+    if changed:
+        p.write_bytes(plistlib.dumps(d))
+        print(f'[build.sh] patched ParallelizationEnabled=false in {changed} xctestrun entries')
+except Exception as e:
+    print(f'[build.sh] WARN: could not patch xctestrun: {e}')
+PY
+fi
 
 # ── write xcresult.path file for downstream scripts ───────────────────────────
 [ -n "$XCRESULT_PATH" ] && printf '%s\n' "$XCRESULT_PATH" > "$ITER_DIR/xcresult.path"
