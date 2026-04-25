@@ -15,6 +15,10 @@ Versions are not published as git tags yet; the `v0.x` strings referenced in `RE
 - **README §"可选: AXe CLI(让 a11y triage 更省 token)"** documents the install path, the agent-side consent contract, and what happens if you skip it (graceful screenshot fallback).
 - **`SKILL.md` §"Optional: AXe CLI"** spells out the agent-side contract: when about to call `sim_snapshot.sh --tree` and `axe` is absent, the agent must ask the user once per session before invoking `install_axe.sh`. On refusal, fall back to screenshot and don't ask again.
 
+### Fixed
+
+- **`parse_failure.py` now fails fast with a readable message on Python < 3.7** instead of crashing mid-run with `AttributeError: 'NoneType' object has no attribute 'split'` or similar deep-stack errors. The script uses `subprocess.run(capture_output=True, text=True)` which requires 3.7+; the version gate runs before any other imports and exits 3 with a one-line install hint. macOS system `python3`, Homebrew, and pyenv-managed interpreters all satisfy this; only `python2` accidentally aliased as `python3` would trip it. Also removed an unused `import time` carry-over from an earlier draft (no behavioral change).
+
 ### Changed
 
 - **Soften hardcoded `patrol_cli 4.3.1` → `patrol_cli 4.3.x` in user-facing docs.** SKILL.md / README.md / `reference/patrol-patterns.md` now state "developed against 4.3.x — currently 4.3.1 — forward-compatible within 4.3.x; bumps to 4.4+ may need re-verification of Issue 15/16 workarounds". This reduces false-failure pressure when users run a slightly newer 4.3.x without anything actually breaking. **Exception:** `reference/troubleshooting.md` L619 keeps the exact `patrol_cli-4.3.1/lib/src/crossplatform/app_options.dart:279` path because it's a forensic citation (must remain reproducible — readers need to find that exact line in their pub-cache). The prose around the citation already says `patrol_cli 4.3.x`.

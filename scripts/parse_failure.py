@@ -9,14 +9,30 @@ Stdout: single JSON object { source, xcresult_path, xcresult_version, failures[]
 Exit 0: success (empty failures[] is valid — means no failures found)
 Exit 1: xcresult path not found or xcresulttool unavailable
 Exit 2: JSON parse error from xcresulttool output
+Exit 3: Python interpreter is older than 3.7 (subprocess.run capture_output / text)
 """
+import sys
+
+# Hard version gate. We use subprocess.run(capture_output=True, text=True), both of
+# which require Python 3.7+. macOS system `python3` (when present) and Homebrew /
+# pyenv-managed interpreters all satisfy this; only ancient distros or a stray
+# `python2` symlinked as `python3` would trip this. Failing fast with a clear
+# message beats a stack-traced AttributeError mid-run.
+if sys.version_info < (3, 7):
+    sys.stderr.write(
+        f"[parse_failure] FATAL: Python >= 3.7 required, got "
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}\n"
+        f"[parse_failure]        Install a newer Python (brew install python@3.12) "
+        f"or invoke this script with an explicit interpreter, e.g.\n"
+        f"[parse_failure]          /usr/bin/python3 {sys.argv[0]} ...\n"
+    )
+    sys.exit(3)
+
 import argparse
 import json
 import os
 import re
 import subprocess
-import sys
-import time
 
 
 # ── constants ─────────────────────────────────────────────────────────────────
