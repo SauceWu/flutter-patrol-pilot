@@ -7,6 +7,11 @@
 # instructions). The public-facing CLAUDE.md template lives at templates/CLAUDE_md_snippet.md.
 CLAUDE.md
 
+# Internal design log used while developing this skill. Kept on disk as a personal
+# scratchpad / smoke-test history but not part of the public release. The public
+# design rationale lives in README.md and CHANGELOG.md.
+PLAN.md
+
 # ── Python bytecode cache (from scripts/parse_failure.py) ─────────────────────
 __pycache__/
 *.pyc

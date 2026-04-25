@@ -4,11 +4,12 @@
 
 ## Scope
 
-- [ ] `scripts/` — shell / Python (contract: always emit a single JSON object on stdout, even on failure)
+- [ ] `scripts/init_project.sh` — one-shot setup (must stay idempotent; stdout single-line JSON summary)
+- [ ] `scripts/` (other) — shell / Python (contract: always emit a single JSON object on stdout, even on failure)
 - [ ] `reference/` — agent-facing triage / protocol / patterns docs
 - [ ] `templates/` — CLAUDE.md / AGENTS.md / Cursor rule snippets, or `patrol_test_template.dart`
 - [ ] `SKILL.md` — skill metadata / workflow
-- [ ] `README.md` / `PLAN.md` / `LICENSE` / `.github/`
+- [ ] `README.md` / `CHANGELOG.md` / `LICENSE` / `.github/`
 - [ ] Other
 
 ## Hard rules checklist (MUST be green before merging)
@@ -18,8 +19,10 @@
 - [ ] No new script hardcodes a simulator UDID, device name, or bundle ID — all are parameters
 - [ ] `description:` in `SKILL.md` stays under ~320 chars and keeps at least 3 Chinese + 2 English trigger phrases
 - [ ] If you added a new failure mode to `run_test.sh` / `build.sh`, `reference/failure-triage.md` has a matching row
+- [ ] If you changed `init_project.sh`, it stays idempotent (re-running produces no extra changes) and you ran it at least once with `--dry-run` against a clean Flutter project
 - [ ] If you touched `scripts/*.sh`, you ran `bash -n scripts/*.sh` locally and it passed
 - [ ] If you added a runtime dep, it's documented in `README.md` → Prerequisites, not hidden inside a script
+- [ ] If this change is user-visible, `CHANGELOG.md` has a new Unreleased entry
 
 ## Test plan
 

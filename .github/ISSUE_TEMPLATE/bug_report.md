@@ -12,6 +12,7 @@ assignees: ''
 
 ## Which script / doc
 
+- [ ] `scripts/init_project.sh` (one-shot Patrol + iOS setup)
 - [ ] `scripts/boot_sim.sh`
 - [ ] `scripts/build.sh`
 - [ ] `scripts/run_test.sh`
