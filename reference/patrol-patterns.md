@@ -1,7 +1,7 @@
 # Patrol 4.x Patterns Cheatsheet
 
 **Usage:** This document is consulted at iteration loop step [0] (generate test) and step [6] (fix test).
-All examples reflect Patrol 4.x APIs (patrol_cli 4.3.1, patrol Flutter package 4.x).
+All examples reflect Patrol 4.x APIs (patrol_cli 4.3.x — verified against 4.3.1 — patrol Flutter package 4.x).
 When generating or repairing test code, treat this cheatsheet as the authoritative reference.
 Do not rely on training data for Patrol API surface — agents frequently hallucinate vanilla `find.byText()` calls
 and omit `$.platform.mobile` in favor of non-existent alternatives.

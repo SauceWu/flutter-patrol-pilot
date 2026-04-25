@@ -69,7 +69,7 @@ Simulator logs, xcresult dumps, and Flutter build output are enormous. Defaults:
 On first invocation in a project, verify once and cache the result:
 
 - `flutter --version` (≥ 3.22; Patrol 4.x requires iOS deployment target ≥ 13.0)
-- `patrol --version` (install with `dart pub global activate patrol_cli` if missing; this skill is developed against `patrol_cli 4.3.1`)
+- `patrol --version` (install with `dart pub global activate patrol_cli` if missing; this skill is developed against `patrol_cli 4.3.x` — currently 4.3.1 — and is forward-compatible within 4.3.x; bumps to 4.4+ may need re-verification of the Issue 15 / Issue 16 workarounds)
 - Patrol configured in `pubspec.yaml` (`patrol:` dev_dependency) and a `patrol_test/` directory with at least one test exists (Patrol 4.x default; 3.x's `integration_test/` layout is deprecated)
 - At least one iOS simulator available (`xcrun simctl list devices available`)
 

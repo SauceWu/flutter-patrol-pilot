@@ -146,7 +146,7 @@ flutter-patrol-pilot/
 Skill 在第一次运行时会自动验证并缓存:
 
 - Flutter ≥ 3.22(Patrol 4.x 要求 iOS deployment target ≥ 13.0)
-- Patrol CLI 已激活: `dart pub global activate patrol_cli`(本 skill 开发于 `patrol_cli 4.3.1`)
+- Patrol CLI 已激活: `dart pub global activate patrol_cli`(本 skill 开发于 `patrol_cli 4.3.x` —— 目前 4.3.1;4.3.x 内向前兼容,bump 到 4.4+ 时需要复核 Issue 15/16 的 workaround)
 - Xcode 16+ 或 Xcode 26.x(脚本对 `xcresulttool` 新旧两种 API 都做了版本适配)
 - 至少一个 iOS 模拟器: `xcrun simctl list devices available`
 - 目标 sim 的 iOS runtime 与 Xcode 自带 SDK 版本匹配(否则 `patrol test` 的 `-destination "OS=latest"` 会找不到设备)
