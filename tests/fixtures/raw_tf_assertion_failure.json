@@ -1,0 +1,7 @@
+{
+  "testName": "login_test_correct_password",
+  "targetName": "RunnerUITests",
+  "testIdentifier": 12345,
+  "testIdentifierString": "RunnerUITests/RunnerUITests/test_login_correct_password",
+  "failureText": "TestFailure: Expected 'logged_in' but got 'logged_out'\n  package:my_app/screens/login.dart 42:18  LoginScreen.build\n  package:flutter/src/widgets/framework.dart 200:5  Widget._renderFrame\n  dart:async/timer.dart 50:1"
+}

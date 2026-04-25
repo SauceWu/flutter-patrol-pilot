@@ -1,0 +1,7 @@
+{
+  "testName": "smoke_test",
+  "targetName": "RunnerUITests",
+  "testIdentifier": 99999,
+  "testIdentifierString": "RunnerUITests/RunnerUITests/smoke_test",
+  "failureText": "The test runner timed out while preparing to run tests.\nUnderlying: dyld: Library not loaded: @rpath/_Testing_Foundation.framework/_Testing_Foundation\n  Referenced from: /Users/.../Runner.app/Runner\n  Reason: image not found"
+}

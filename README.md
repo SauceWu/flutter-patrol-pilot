@@ -277,8 +277,11 @@ Simulator / xcresult / Flutter build 的原始 log 是 token 杀手,skill 默认
 ## 贡献
 
 - 改脚本前先本地跑 `bash -n scripts/*.sh && python3 -c "import ast; ast.parse(open('scripts/parse_failure.py').read())"` 做语法检查
+- 改 `parse_failure.py` 后跑 `python3 -m unittest discover tests -v`(36 tests / < 0.1s / 纯 stdlib,无第三方依赖)
 - 任何改动都要保证 stdout 只有一行 JSON(破坏契约会让 agent 失明)
-- 新增 failure 信号映射时同时更新 `reference/failure-triage.md` 的表和 per-category 详细块
+- 新增 failure 信号映射(`SIGNAL_PATTERNS`)时同时:
+  - 更新 `reference/failure-triage.md` 的表和 per-category 详细块
+  - 在 `tests/test_parse_failure.py` `TestClassifySignal.KNOWN_PATTERNS` 加一行,size-guard 测试会在你忘了加的时候 fail
 
 ## License
 
